@@ -13,13 +13,18 @@
   import { t } from 'svelte-i18n';
 
   export let assets: AssetResponseDto[];
-  export let onResolve: (duplicateAssetIds: string[], trashIds: string[]) => void;
+  export let onResolve: (duplicateAssetIds: string[], trashIds: string[], selectedDataToSync) => void;
   export let onStack: (assets: AssetResponseDto[]) => void;
   const { isViewing: showAssetViewer, asset: viewingAsset, setAsset } = assetViewingStore;
   const getAssetIndex = (id: string) => assets.findIndex((asset) => asset.id === id);
 
   let selectedAssetIds = new Set<string>();
   $: trashCount = assets.length - selectedAssetIds.size;
+  let selectedSyncData = {
+    dateTime: null,
+    description: null,
+    location: null,
+  };
 
   onMount(() => {
     const suggestedAsset = suggestDuplicateByFileSize(assets);
@@ -47,6 +52,25 @@
     selectedAssetIds = selectedAssetIds;
   };
 
+  const onSelectDate = (dateTime) => {
+    selectedSyncData.dateTime = selectedSyncData.dateTime?.ts === dateTime.ts ? null : dateTime;
+  };
+
+  const onSelectDescription = (description) => {
+    selectedSyncData.description = selectedSyncData.description === description ? null : description;
+  };
+
+  const onSelectLocation = (location) => {
+    if (
+      selectedSyncData.location?.longitude === location.longitude &&
+      selectedSyncData.location?.latitude === location.latitude
+    ) {
+      selectedSyncData.location = null;
+    } else {
+      selectedSyncData.location = location;
+    }
+  };
+
   const onSelectNone = () => {
     selectedAssetIds.clear();
     selectedAssetIds = selectedAssetIds;
@@ -59,7 +83,7 @@
   const handleResolve = () => {
     const trashIds = assets.map((asset) => asset.id).filter((id) => !selectedAssetIds.has(id));
     const duplicateAssetIds = assets.map((asset) => asset.id);
-    onResolve(duplicateAssetIds, trashIds);
+    onResolve(duplicateAssetIds, trashIds, selectedSyncData);
   };
 
   const handleStack = () => {
@@ -88,6 +112,10 @@
       <DuplicateAsset
         {asset}
         {onSelectAsset}
+        {onSelectDate}
+        {onSelectDescription}
+        {onSelectLocation}
+        {selectedSyncData}
         isSelected={selectedAssetIds.has(asset.id)}
         onViewAsset={(asset) => setAsset(asset)}
       />
