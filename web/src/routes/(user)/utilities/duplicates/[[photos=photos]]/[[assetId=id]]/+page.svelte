@@ -9,22 +9,16 @@
   } from '$lib/components/shared-components/notification/notification';
   import ShowShortcuts from '$lib/components/shared-components/show-shortcuts.svelte';
   import DuplicatesCompareControl from '$lib/components/utilities-page/duplicates/duplicates-compare-control.svelte';
-  import type { AssetResponseDto, AlbumResponseDto, AssetBulkUpdateDto } from '@immich/sdk';
-  import { deleteAssets, updateAssets, getAllAlbums } from '@immich/sdk';
+  import type { AssetResponseDto, AssetBulkUpdateDto } from '@immich/sdk';
+  import { deleteAssets, updateAsset, updateAssets } from '@immich/sdk';
   import { featureFlags } from '$lib/stores/server-config.store';
-  import { stackAssets } from '$lib/utils/asset-utils';
   import { suggestDuplicate } from '$lib/utils/duplicate-utils';
   import { handleError } from '$lib/utils/handle-error';
   import { Button, HStack, IconButton, Text } from '@immich/ui';
   import { t } from 'svelte-i18n';
   import type { PageData } from './$types';
-  import { suggestDuplicateByFileSize } from '$lib/utils';
-  import LinkButton from '$lib/components/elements/buttons/link-button.svelte';
   import { mdiCheckOutline, mdiInformationOutline, mdiKeyboard, mdiTrashCanOutline, mdiCogOutline } from '@mdi/js';
   import { stackAssets, addAssetsToAlbum } from '$lib/utils/asset-utils';
-  import ShowShortcuts from '$lib/components/shared-components/show-shortcuts.svelte';
-  import CircleIconButton from '$lib/components/elements/buttons/circle-icon-button.svelte';
-  import Icon from '$lib/components/elements/icon.svelte';
   import DuplicateOptions from '$lib/components/utilities-page/duplicates/duplicate-options.svelte';
   import { locale } from '$lib/stores/preferences.store';
   import type { SelectedSyncData } from '$lib/components/utilities-page/duplicates/duplicates-compare-control.svelte';
@@ -111,7 +105,9 @@
           duplicateId: null,
         };
         if (isSynchronizeAlbumsActive) {
-          await synchronizeAlbums(duplicateAssetIds);
+          selectedDataToSync.albums?.forEach((album) => {
+            addAssetsToAlbum(album.id, duplicateAssetIds, false);
+          });
         }
         if (isSynchronizeArchivesActive) {
           assetBulkUpdate.isArchived = selectedDataToSync.isArchived;
@@ -119,8 +115,32 @@
         if (isSynchronizeFavoritesActive) {
           assetBulkUpdate.isFavorite = selectedDataToSync.isFavorite;
         }
+        if (selectedDataToSync.dateTime !== null) {
+          assetBulkUpdate.dateTimeOriginal = selectedDataToSync.dateTime;
+        }
+        if (selectedDataToSync.location !== null) {
+          assetBulkUpdate.latitude = selectedDataToSync?.location.latitude;
+          assetBulkUpdate.longitude = selectedDataToSync?.location.longitude;
+        }
+
         await deleteAssets({ assetBulkDeleteDto: { ids: trashIds, force: !$featureFlags.trash } });
         await updateAssets({ assetBulkUpdateDto: assetBulkUpdate });
+
+        if (selectedDataToSync.description !== null) {
+          await Promise.all(
+            duplicateAssetIds.map((assetId) =>
+              updateAsset({ id: assetId, updateAssetDto: { description: selectedDataToSync.description } }),
+            ),
+          );
+        }
+
+        if (selectedDataToSync.description !== null) {
+          await Promise.all(
+            duplicateAssetIds.map((assetId) =>
+              updateAsset({ id: assetId, updateAssetDto: { description: selectedDataToSync.description } }),
+            ),
+          );
+        }
 
         duplicates = duplicates.filter((duplicate) => duplicate.duplicateId !== duplicateId);
 
@@ -129,17 +149,6 @@
       trashIds.length > 0 && !$featureFlags.trash ? $t('delete_duplicates_confirmation') : undefined,
       trashIds.length > 0 && !$featureFlags.trash ? $t('permanently_delete') : undefined,
     );
-  };
-
-  const synchronizeAlbums = async (assetIds: string[]) => {
-    const allAlbums: AlbumResponseDto[] = await Promise.all(
-      assetIds.map((assetId) => getAllAlbums({ assetId: assetId })),
-    );
-    const albumIds = [...new Set(allAlbums.flat().map((album) => album.id))];
-
-    albumIds.forEach((albumId) => {
-      addAssetsToAlbum(albumId, assetIds, false);
-    });
   };
 
   const handleStack = async (duplicateId: string, assets: AssetResponseDto[]) => {
